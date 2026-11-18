@@ -8,6 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import reprogramacion_api.model.*;
 import reprogramacion_api.model.enums.Rol;
 import reprogramacion_api.repository.*;
+import reprogramacion_api.service.CuiGenerador;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -24,18 +25,17 @@ public class DataInitializer {
     private final ClaseRepository claseRepo;
     private final BloqueNoDisponibleRepository bloqueRepo;
     private final PasswordEncoder encoder;
-
+    private final CuiGenerador cuiGenerador;
     @Bean
     CommandLineRunner seedDatos() {
         return args -> {
-            usuario("U00000001", "Carlos", "Atencio Torres", "coordinacion@utp.edu.pe", Rol.COORDINACION);
-            Usuario docente = usuario("U00000002", "Pedro", "Huaynalaya Montes", "docente@utp.edu.pe", Rol.DOCENTE);
-            Usuario a1 = usuario("U00000003", "Luciana", "Canales Palomino", "alumno1@utp.edu.pe", Rol.ALUMNO);
-            Usuario a2 = usuario("U00000004", "Reiner", "Paiva Ticona", "alumno2@utp.edu.pe", Rol.ALUMNO);
-            Usuario a3 = usuario("U00000005", "Ana", "Ruiz Medina", "alumno3@utp.edu.pe", Rol.ALUMNO);
-            Usuario a4 = usuario("U00000006", "Jorge", "Quispe Vela", "alumno4@utp.edu.pe", Rol.ALUMNO);
-
-            if (cursoRepo.count() > 0) return;   // el escenario de prueba se crea una sola vez
+            usuario("Carlos", "Atencio Torres", "coordinacion@utp.edu.pe", Rol.COORDINACION);
+            Usuario docente = usuario("Pedro", "Huaynalaya Montes", "docente@utp.edu.pe", Rol.DOCENTE);
+            Usuario a1 = usuario("Luciana", "Canales Palomino", "alumno1@utp.edu.pe", Rol.ALUMNO);
+            Usuario a2 = usuario("Reiner", "Paiva Ticona", "alumno2@utp.edu.pe", Rol.ALUMNO);
+            Usuario a3 = usuario("Ana", "Ruiz Medina", "alumno3@utp.edu.pe", Rol.ALUMNO);
+            Usuario a4 = usuario("Jorge", "Quispe Vela", "alumno4@utp.edu.pe", Rol.ALUMNO);
+            if (cursoRepo.count() > 0) return; 
 
             Curso curso = cursoRepo.save(Curso.builder()
                     .nombre("Desarrollo Web Integrado").seccion("A").periodo("2026-II")
@@ -66,12 +66,18 @@ public class DataInitializer {
         };
     }
 
-    private Usuario usuario(String cui, String nombres, String apellidos, String correo, Rol rol) {
-        return usuarioRepo.findByCorreo(correo).orElseGet(() -> usuarioRepo.save(Usuario.builder()
-                .cui(cui).nombres(nombres).apellidos(apellidos)
-                .correo(correo).password(encoder.encode("123456"))
-                .rol(rol).build()));
+    private Usuario usuario(String nombres, String apellidos, String correo, Rol rol) {
+    Usuario u = usuarioRepo.findByCorreo(correo).orElseGet(() -> Usuario.builder()
+            .cui(cuiGenerador.generar(rol)).nombres(nombres).apellidos(apellidos)
+            .correo(correo).password(encoder.encode("123456"))
+            .rol(rol).build());
+    boolean obsoleto = !cuiGenerador.coincideConRol(u.getCui(), rol)
+            || u.getCui().matches("[A-Z]0{4}\\d{4}");
+    if (obsoleto) {
+        u.setCui(cuiGenerador.generar(rol));
     }
+    return usuarioRepo.save(u);
+}
 
     private void bloque(Usuario u, DayOfWeek dia, int desde, int hasta, String motivo) {
         bloqueRepo.save(BloqueNoDisponible.builder()

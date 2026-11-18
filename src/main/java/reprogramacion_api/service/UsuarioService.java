@@ -20,6 +20,7 @@ public class UsuarioService {
 
     private final UsuarioRepository repo;
     private final PasswordEncoder encoder;
+    private final CuiGenerador cuiGenerador;
 
     @Transactional(readOnly = true)
     public List<UsuarioResponse> listar(Rol rol) {
@@ -40,12 +41,9 @@ public class UsuarioService {
         if (repo.existsByCorreo(req.correo())) {
             throw new ReglaNegocioException("Ya existe un usuario con el correo " + req.correo());
         }
-        if (repo.existsByCui(req.cui())) {
-            throw new ReglaNegocioException("Ya existe un usuario con el CUI " + req.cui());
-        }
 
         Usuario u = Usuario.builder()
-                .cui(req.cui())
+                .cui(cuiGenerador.generar(req.rol()))
                 .nombres(req.nombres())
                 .apellidos(req.apellidos())
                 .correo(req.correo())

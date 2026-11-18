@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import reprogramacion_api.model.enums.Rol;
 
 public record UsuarioRequest(
-        @NotBlank @Size(max = 20) String cui,
+        @Size(max = 20) String cui,
         @NotBlank @Size(max = 100) String nombres,
         @NotBlank @Size(max = 100) String apellidos,
         @NotBlank @Email @Size(max = 120) String correo,
