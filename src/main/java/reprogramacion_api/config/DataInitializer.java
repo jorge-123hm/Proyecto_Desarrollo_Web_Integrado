@@ -9,6 +9,7 @@ import reprogramacion_api.model.*;
 import reprogramacion_api.model.enums.Rol;
 import reprogramacion_api.repository.*;
 import reprogramacion_api.service.CuiGenerador;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -26,7 +27,9 @@ public class DataInitializer {
     private final BloqueNoDisponibleRepository bloqueRepo;
     private final PasswordEncoder encoder;
     private final CuiGenerador cuiGenerador;
+    
     @Bean
+    @ConditionalOnProperty(name = "app.seed.enabled", havingValue = "true", matchIfMissing = true)
     CommandLineRunner seedDatos() {
         return args -> {
             usuario("Carlos", "Atencio Torres", "coordinacion@utp.edu.pe", Rol.COORDINACION);

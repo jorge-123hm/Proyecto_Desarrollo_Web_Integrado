@@ -20,6 +20,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import reprogramacion_api.security.JwtAuthFilter;
+import org.springframework.beans.factory.annotation.Value;
+import java.util.Arrays;
 
 import java.util.List;
 
@@ -29,6 +31,8 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
+    @Value("${app.cors.allowed-origins:http://localhost:4200}")
+    private String allowedOrigins = "http://localhost:4200";
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -62,11 +66,14 @@ public class SecurityConfig {
         return config.getAuthenticationManager();
     }
 
-    /** Permite que Angular (localhost:4200) consuma la API */
+    /** Permite que el frontend (local o desplegado) consuma la API */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of("http://localhost:4200"));
+        cfg.setAllowedOrigins(Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList());
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         cfg.setMaxAge(3600L);
