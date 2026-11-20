@@ -21,6 +21,7 @@ import reprogramacion_api.repository.CursoRepository;
 import reprogramacion_api.repository.MatriculaRepository;
 import reprogramacion_api.repository.UsuarioRepository;
 import reprogramacion_api.support.Datos;
+import reprogramacion_api.service.CuiGenerador;
 
 import java.util.Optional;
 
@@ -34,6 +35,8 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class DataInitializerTest {
 
+    @Mock
+    private CuiGenerador cuiGenerador;
     @Mock
     private UsuarioRepository usuarioRepo;
     @Mock
@@ -51,8 +54,7 @@ class DataInitializerTest {
 
     @BeforeEach
     void setUp() {
-        initializer = new DataInitializer(usuarioRepo, cursoRepo, matriculaRepo, claseRepo, bloqueRepo, encoder);
-        when(encoder.encode(any())).thenReturn("HASH");
+        initializer = new DataInitializer(usuarioRepo, cursoRepo, matriculaRepo, claseRepo, bloqueRepo, encoder, cuiGenerador);        when(encoder.encode(any())).thenReturn("HASH");
         when(usuarioRepo.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
         when(cursoRepo.save(any(Curso.class))).thenAnswer(inv -> inv.getArgument(0));
     }
