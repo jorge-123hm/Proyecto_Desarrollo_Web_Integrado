@@ -10,6 +10,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import reprogramacion_api.dto.request.BloqueRequest;
 import reprogramacion_api.dto.response.BloqueResponse;
+import reprogramacion_api.dto.response.DisponibilidadResumenResponse;
 import reprogramacion_api.exception.RecursoNoEncontradoException;
 import reprogramacion_api.exception.ReglaNegocioException;
 import reprogramacion_api.model.BloqueNoDisponible;
@@ -180,6 +181,82 @@ class DisponibilidadServiceTest {
     void reemplazar_conRangoInvalido_lanzaReglaNegocio() {
         assertThrows(ReglaNegocioException.class, () -> service.reemplazar(CORREO, List.of(
                 bloque(DayOfWeek.MONDAY, 12, 8))));
+    }
+
+    // ---------- límite de horas ocupadas (solo alumnos) ----------
+
+    @Test
+    void agregar_alumnoQueSuperaElLimite_lanzaReglaNegocio() {
+        // ya tiene 18 h guardadas; un bloque de 3 h pasaría las 20 h
+        when(bloqueRepo.findByUsuarioId(3L)).thenReturn(List.of(
+                Datos.bloque(usuario, DayOfWeek.MONDAY, 6, 15),
+                Datos.bloque(usuario, DayOfWeek.TUESDAY, 6, 15)));
+
+        assertThrows(ReglaNegocioException.class,
+                () -> service.agregar(CORREO, bloque(DayOfWeek.WEDNESDAY, 8, 11)));
+        verify(bloqueRepo, never()).save(any());
+    }
+
+    @Test
+    void agregar_alumnoJustoEnElLimite_esValido() {
+        when(bloqueRepo.findByUsuarioId(3L)).thenReturn(List.of(
+                Datos.bloque(usuario, DayOfWeek.MONDAY, 6, 15),
+                Datos.bloque(usuario, DayOfWeek.TUESDAY, 6, 15)));
+        when(bloqueRepo.save(any(BloqueNoDisponible.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BloqueResponse res = service.agregar(CORREO, bloque(DayOfWeek.WEDNESDAY, 8, 10)); // 18 + 2 = 20
+
+        assertEquals(DayOfWeek.WEDNESDAY, res.diaSemana());
+    }
+
+    @Test
+    void agregar_docenteNoTieneLimite() {
+        Usuario docente = Datos.usuario(4L, Rol.DOCENTE, "docente@utp.edu.pe");
+        when(usuarioRepo.findByCorreo("docente@utp.edu.pe")).thenReturn(Optional.of(docente));
+        when(bloqueRepo.findByUsuarioId(4L)).thenReturn(List.of(
+                Datos.bloque(docente, DayOfWeek.MONDAY, 6, 23),
+                Datos.bloque(docente, DayOfWeek.TUESDAY, 6, 23)));
+        when(bloqueRepo.save(any(BloqueNoDisponible.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BloqueResponse res = service.agregar("docente@utp.edu.pe", bloque(DayOfWeek.WEDNESDAY, 6, 23));
+
+        assertEquals(DayOfWeek.WEDNESDAY, res.diaSemana());
+    }
+
+    @Test
+    void reemplazar_alumnoQueSuperaElLimite_lanzaReglaNegocioYNoBorra() {
+        assertThrows(ReglaNegocioException.class, () -> service.reemplazar(CORREO, List.of(
+                bloque(DayOfWeek.MONDAY, 6, 16),
+                bloque(DayOfWeek.TUESDAY, 6, 16),
+                bloque(DayOfWeek.WEDNESDAY, 6, 9))));   // 10 + 10 + 3 = 23 h > 20 h
+        verify(bloqueRepo, never()).deleteByUsuarioId(any());
+    }
+
+    @Test
+    void resumen_alumno_devuelveHorasOcupadasYRestantes() {
+        when(bloqueRepo.findByUsuarioId(3L)).thenReturn(List.of(
+                Datos.bloque(usuario, DayOfWeek.MONDAY, 8, 12),
+                Datos.bloque(usuario, DayOfWeek.TUESDAY, 8, 10)));
+
+        DisponibilidadResumenResponse res = service.resumen(CORREO);
+
+        assertTrue(res.aplicaLimite());
+        assertEquals(20, res.limiteHoras());
+        assertEquals(6.0, res.horasOcupadas());
+        assertEquals(14.0, res.horasRestantes());
+    }
+
+    @Test
+    void resumen_docente_noAplicaLimite() {
+        Usuario docente = Datos.usuario(4L, Rol.DOCENTE, "docente@utp.edu.pe");
+        when(usuarioRepo.findByCorreo("docente@utp.edu.pe")).thenReturn(Optional.of(docente));
+        when(bloqueRepo.findByUsuarioId(4L)).thenReturn(List.of());
+
+        DisponibilidadResumenResponse res = service.resumen("docente@utp.edu.pe");
+
+        assertFalse(res.aplicaLimite());
+        assertNull(res.limiteHoras());
+        assertNull(res.horasRestantes());
     }
 
     // ---------- eliminar ----------

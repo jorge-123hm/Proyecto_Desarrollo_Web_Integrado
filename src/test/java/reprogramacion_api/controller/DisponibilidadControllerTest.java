@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import reprogramacion_api.dto.request.BloqueRequest;
 import reprogramacion_api.dto.request.DisponibilidadRequest;
 import reprogramacion_api.dto.response.BloqueResponse;
+import reprogramacion_api.dto.response.DisponibilidadResumenResponse;
 import reprogramacion_api.service.DisponibilidadService;
 import reprogramacion_api.support.Datos;
 
@@ -69,5 +70,13 @@ class DisponibilidadControllerTest {
 
         assertEquals(204, res.getStatusCode().value());
         verify(service).eliminar(CORREO, 1L);
+    }
+
+    @Test
+    void resumen_usaElCorreoDelUsuarioAutenticado() {
+        DisponibilidadResumenResponse resumen = DisponibilidadResumenResponse.de(360, 20);
+        when(service.resumen(CORREO)).thenReturn(resumen);
+
+        assertSame(resumen, controller.resumen(Datos.auth(CORREO, "ALUMNO")));
     }
 }

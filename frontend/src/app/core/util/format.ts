@@ -54,3 +54,25 @@ export function mensajeError(err: unknown): string {
     default: return `Error del servidor (${err.status})`;
   }
 }
+export function fechaLocal(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function isoDe(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
+export function sumarDias(iso: string, n: number): string {
+  const d = fechaLocal(iso);
+  d.setDate(d.getDate() + n);
+  return isoDe(d);
+}
+
+/** Lunes de la semana a la que pertenece la fecha */
+export function lunesDe(iso: string): string {
+  const d = fechaLocal(iso);
+  return sumarDias(iso, -((d.getDay() + 6) % 7));
+}

@@ -1,20 +1,22 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject, input, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { switchMap } from 'rxjs';
 import { Clase, OpcionHorario } from '../../core/models/models';
 import { ClasesService } from '../../core/services/clases.service';
+import { DisponibilidadService } from '../../core/services/disponibilidad.service';
 import { SolicitudesService } from '../../core/services/solicitudes.service';
 import { hhmm, hoyIso, mensajeError } from '../../core/util/format';
 import { ConfirmService } from '../../shared/confirm';
-import { DiaPipe, HoraPipe } from '../../shared/pipes';
+import { EventoHorario, FondoHorario, HorarioSemanal } from '../../shared/horario-semanal';
+import { HoraPipe } from '../../shared/pipes';
 import { ToastService } from '../../shared/toast';
 import { Cargando, Porcentaje } from '../../shared/ui';
 
 @Component({
   selector: 'app-proponer',
-  imports: [DatePipe, ReactiveFormsModule, RouterLink, HoraPipe, DiaPipe, Cargando, Porcentaje],
+  imports: [DatePipe, ReactiveFormsModule, RouterLink, HoraPipe, Cargando, Porcentaje, HorarioSemanal],
   template: `
     <a routerLink="/docente/clases" class="back">← Mis clases</a>
 
@@ -64,7 +66,7 @@ import { Cargando, Porcentaje } from '../../shared/ui';
             </button>
           </form>
           <p class="hint">
-            El sistema revisa de lunes a sábado (07:00–22:00) y ordena por la cantidad de alumnos que están libres.
+            El sistema revisa de lunes a sábado (07:00–22:00) y sugiere las franjas con más alumnos libres.
           </p>
         </section>
 
@@ -72,32 +74,19 @@ import { Cargando, Porcentaje } from '../../shared/ui';
           @if (ops.length === 0) {
             <div class="vacio"><p>No hay franjas disponibles en ese rango. Pruebe ampliar las fechas.</p></div>
           } @else {
-            <div class="table-wrap">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Fecha</th><th>Horario</th><th>Alumnos libres</th><th>Coincidencia</th><th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (o of ops; track o.fecha + o.horaInicio) {
-                    <tr>
-                      <td>
-                        <strong>{{ o.fecha | date: 'EEE d MMM' }}</strong>
-                        <div class="muted small">{{ o.diaSemana | dia }}</div>
-                      </td>
-                      <td>{{ o.horaInicio | hora }} – {{ o.horaFin | hora }}</td>
-                      <td>{{ o.alumnosDisponibles }} de {{ o.totalAlumnos }}</td>
-                      <td class="w-pct"><app-porcentaje [valor]="o.porcentaje" /></td>
-                      <td class="t-right">
-                        <button type="button" class="btn btn-sm btn-primary" [disabled]="enviando()"
-                                (click)="solicitar(c, o, false)">Solicitar</button>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
+            <section class="card card-flush">
+              <app-horario-semanal [eventos]="eventosOpciones()" [fondo]="fondo()" [semanaInicial]="semana()"
+                                   (elegir)="elegirOpcion($event, c)">
+                <span class="leyenda"><i class="l-alta"></i>≥ 80% libres</span>
+                <span class="leyenda"><i class="l-media"></i>50–79%</span>
+                <span class="leyenda"><i class="l-baja"></i>&lt; 50%</span>
+                <span class="leyenda"><i class="l-original"></i>Clase actual</span>
+                <span class="leyenda"><i class="l-fondo"></i>Usted no disponible</span>
+              </app-horario-semanal>
+              <p class="hint">
+                {{ ops.length }} franja(s) sugerida(s). Haga clic en una para solicitarla; use ‹ › para ver otras semanas.
+              </p>
+            </section>
           }
         }
       }
@@ -171,6 +160,7 @@ export class Proponer implements OnInit {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
+  private readonly disp = inject(DisponibilidadService);
 
   protected readonly manana = hoyIso(1);
 
@@ -179,6 +169,36 @@ export class Proponer implements OnInit {
   protected readonly modo = signal<'sugeridas' | 'manual'>('sugeridas');
 
   protected readonly opciones = signal<OpcionHorario[] | null>(null);
+  /** Bloques de no disponibilidad del docente, se dibujan como fondo rayado en el horario */
+  protected readonly fondo = signal<FondoHorario[]>([]);
+  /** Semana con la que abre el horario: la de la primera fecha sugerida */
+  protected readonly semana = signal<string | null>(null);
+
+  protected readonly eventosOpciones = computed<EventoHorario[]>(() => {
+    const evs: EventoHorario[] = (this.opciones() ?? []).map((o, i) => ({
+      id: 'op' + i,
+      fecha: o.fecha,
+      horaInicio: o.horaInicio,
+      horaFin: o.horaFin,
+      titulo: Math.round(o.porcentaje) + '%',
+      detalle: `${o.alumnosDisponibles} de ${o.totalAlumnos} libres`,
+      tono: o.porcentaje >= 80 ? 'alta' : o.porcentaje >= 50 ? 'media' : 'baja',
+      ref: i,
+    }));
+    const c = this.clase();
+    if (c) {
+      evs.push({
+        id: 'actual',
+        fecha: c.fechaOriginal,
+        horaInicio: c.horaInicio,
+        horaFin: c.horaFin,
+        titulo: 'Clase actual',
+        tono: 'original',
+        clicable: false,
+      });
+    }
+    return evs;
+  });
   protected readonly buscando = signal(false);
   protected readonly evaluacion = signal<OpcionHorario | null>(null);
   protected readonly evaluando = signal(false);
@@ -208,6 +228,11 @@ export class Proponer implements OnInit {
           return;
         }
         this.manual.patchValue({ horaInicio: hhmm(c.horaInicio), horaFin: hhmm(c.horaFin) });
+        this.disp.listar().subscribe({
+          next: (bs) =>
+            this.fondo.set(bs.map((b) => ({ dia: b.diaSemana, horaInicio: b.horaInicio, horaFin: b.horaFin }))),
+          error: () => {}, // decorativo: el backend igual valida el cruce
+        });
         this.buscar();
       },
       error: (e) => {
@@ -229,6 +254,7 @@ export class Proponer implements OnInit {
     this.clases.opciones(c.id, { desde, hasta, limite }).subscribe({
       next: (ops) => {
         this.opciones.set(ops);
+        this.semana.set(ops.map((o) => o.fecha).sort()[0] ?? desde);
         this.buscando.set(false);
       },
       error: (e) => {
@@ -237,6 +263,11 @@ export class Proponer implements OnInit {
         this.toast.error(mensajeError(e));
       },
     });
+  }
+
+  protected elegirOpcion(e: EventoHorario, c: Clase) {
+    const o = e.ref === undefined ? undefined : this.opciones()?.[e.ref];
+    if (o && !this.enviando()) this.solicitar(c, o, false);
   }
 
   protected evaluar() {

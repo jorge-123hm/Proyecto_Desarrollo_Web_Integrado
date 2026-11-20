@@ -1,10 +1,12 @@
 import { DatePipe } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { Notificacion } from '../../core/models/models';
 import { AuthService } from '../../core/services/auth.service';
 import { NotificacionesService } from '../../core/services/notificaciones.service';
+import { TiempoRealService } from '../../core/services/tiempo-real.service';
 import { mensajeError } from '../../core/util/format';
 import { ToastService } from '../../shared/toast';
 import { Cargando, Vacio } from '../../shared/ui';
@@ -64,6 +66,14 @@ export class Notificaciones {
   protected readonly noLeidas = computed(() => this.lista().filter((n) => !n.leida).length);
 
   constructor() {
+    this.cargar();
+    // Tiempo real: llega una notificación nueva y aparece sin refrescar
+    inject(TiempoRealService).de('notificacion', 'reconectado')
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.cargar());
+  }
+
+  private cargar() {
     this.svc.listar().subscribe({
       next: (l) => {
         this.lista.set(l);

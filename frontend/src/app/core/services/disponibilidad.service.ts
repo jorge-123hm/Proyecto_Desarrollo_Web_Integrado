@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { environment } from '../../../environments/environment';
-import { Bloque, BloqueRequest } from '../models/models';
+import { Bloque, BloqueRequest, DisponibilidadResumen } from '../models/models';
 import { toApiTime } from '../util/format';
 
 @Injectable({ providedIn: 'root' })
@@ -11,6 +11,9 @@ export class DisponibilidadService {
 
   listar() {
     return this.http.get<Bloque[]>(this.url);
+  }
+  resumen() {
+    return this.http.get<DisponibilidadResumen>(`${this.url}/resumen`);
   }
   agregar(req: BloqueRequest) {
     return this.http.post<Bloque>(this.url, {

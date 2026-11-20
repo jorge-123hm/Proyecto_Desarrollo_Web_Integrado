@@ -1,5 +1,6 @@
 package reprogramacion_api.config;
 
+import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,6 +37,9 @@ public class SecurityConfig {
             .cors(c -> c.configurationSource(corsConfigurationSource()))
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // SSE: al cerrar/expirar el SseEmitter Spring re-despacha la petición (ASYNC) sin pasar
+                // por JwtAuthFilter; la petición original ya fue autorizada, así que se deja pasar.
+                .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/api/usuarios/**").hasRole("COORDINACION")
                 .requestMatchers("/api/cursos/**").hasRole("COORDINACION")

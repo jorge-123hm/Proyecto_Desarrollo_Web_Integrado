@@ -149,6 +149,13 @@ export interface Bloque {
   horaFin: string;
   motivo: string | null;
 }
+/** Horas ocupadas vs. tope semanal (el tope solo aplica a alumnos) */
+export interface DisponibilidadResumen {
+  horasOcupadas: number;
+  limiteHoras: number | null;
+  horasRestantes: number | null;
+  aplicaLimite: boolean;
+}
 export interface BloqueRequest {
   diaSemana: DiaSemana;
   horaInicio: string;

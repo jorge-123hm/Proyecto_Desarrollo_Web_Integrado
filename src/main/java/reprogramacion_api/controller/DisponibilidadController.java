@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import reprogramacion_api.dto.request.BloqueRequest;
 import reprogramacion_api.dto.request.DisponibilidadRequest;
 import reprogramacion_api.dto.response.BloqueResponse;
+import reprogramacion_api.dto.response.DisponibilidadResumenResponse;
 import reprogramacion_api.service.DisponibilidadService;
 
 import java.util.List;
@@ -24,6 +25,12 @@ public class DisponibilidadController {
     @GetMapping
     public List<BloqueResponse> listar(Authentication auth) {
         return service.listar(auth.getName());
+    }
+
+    /** Horas ocupadas y tope semanal (el tope solo aplica a alumnos) */
+    @GetMapping("/resumen")
+    public DisponibilidadResumenResponse resumen(Authentication auth) {
+        return service.resumen(auth.getName());
     }
 
     /** Agrega un bloque */

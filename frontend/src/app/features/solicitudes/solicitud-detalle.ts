@@ -1,11 +1,13 @@
 import { DatePipe } from '@angular/common';
 import { Component, OnInit, computed, inject, input, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { Solicitud } from '../../core/models/models';
 import { AuthService } from '../../core/services/auth.service';
 import { NotificacionesService } from '../../core/services/notificaciones.service';
 import { SolicitudesService } from '../../core/services/solicitudes.service';
+import { TiempoRealService } from '../../core/services/tiempo-real.service';
 import { mensajeError } from '../../core/util/format';
 import { ConfirmService } from '../../shared/confirm';
 import { HoraPipe } from '../../shared/pipes';
@@ -111,6 +113,22 @@ export class SolicitudDetalle implements OnInit {
   protected readonly resolviendo = signal(false);
   protected readonly errorObs = signal('');
   protected readonly observacion = new FormControl('', { nonNullable: true });
+
+  constructor() {
+    // Tiempo real: si esta solicitud cambia (la resuelve coordinación u otra pestaña), se actualiza sola
+    inject(TiempoRealService).de('solicitud', 'reconectado')
+      .pipe(takeUntilDestroyed())
+      .subscribe((e) => {
+        if (e.tipo === 'reconectado' || e.datos?.id === Number(this.id())) this.recargar();
+      });
+  }
+
+  private recargar() {
+    this.svc.detalle(Number(this.id())).subscribe({
+      next: (s) => this.s.set(s),
+      error: () => {},
+    });
+  }
 
   ngOnInit() {
     this.svc.detalle(Number(this.id())).subscribe({

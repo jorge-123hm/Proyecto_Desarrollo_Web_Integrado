@@ -22,7 +22,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +41,7 @@ public class SolicitudService {
     private final UsuarioRepository usuarioRepo;
     private final MatriculaRepository matriculaRepo;
     private final NotificacionService notificacionService;
+    private final EventoService eventos;
 
     // ---------- CU005: enviar ----------
 
@@ -68,10 +73,13 @@ public class SolicitudService {
 
         // Avisa a coordinación que hay una solicitud nueva
         Clase clase = p.getClase();
-        notificacionService.notificarVarios(
-                usuarioRepo.findByRol(Rol.COORDINACION), guardada,
+        List<Usuario> coordinacion = usuarioRepo.findByRol(Rol.COORDINACION);
+        notificar(coordinacion, guardada,
                 "Nueva solicitud de " + nombre(docente) + " para reprogramar "
                         + clase.getCurso().getNombre() + " (sección " + clase.getCurso().getSeccion() + ")");
+
+        // Tiempo real: la lista de coordinación se actualiza sola, y las demás pestañas del docente también
+        publicarSolicitud("ENVIADA", guardada, coordinacion, docente);
 
         return SolicitudResponse.from(guardada);
     }
@@ -108,6 +116,9 @@ public class SolicitudService {
         SolicitudReprogramacion guardada = solicitudRepo.save(s);
 
         notificarResolucion(guardada, obs);
+
+        // Tiempo real: el docente ve el cambio de estado y las demás pestañas de coordinación también
+        publicarSolicitud("RESUELTA", guardada, usuarioRepo.findByRol(Rol.COORDINACION), s.getDocente());
         return SolicitudResponse.from(guardada);
     }
 
@@ -121,18 +132,18 @@ public class SolicitudService {
                     + p.getHoraInicio().format(HORA) + " a " + p.getHoraFin().format(HORA);
 
             // Docente
-            notificacionService.notificarVarios(List.of(s.getDocente()), s,
+            notificar(List.of(s.getDocente()), s,
                     "Su solicitud fue APROBADA: la clase de " + curso + " será el " + nueva);
 
             // Alumnos matriculados: reciben la fecha definitiva
             List<Usuario> alumnos = matriculaRepo.findByCursoId(clase.getCurso().getId()).stream()
                     .map(m -> m.getAlumno())
                     .toList();
-            notificacionService.notificarVarios(alumnos, s,
+            notificar(alumnos, s,
                     "La clase de " + curso + " del " + clase.getFechaOriginal().format(FECHA)
                             + " fue reprogramada para el " + nueva);
         } else {
-            notificacionService.notificarVarios(List.of(s.getDocente()), s,
+            notificar(List.of(s.getDocente()), s,
                     "Su solicitud para " + curso + " fue RECHAZADA. Motivo: " + obs);
         }
     }
@@ -159,6 +170,32 @@ public class SolicitudService {
     }
 
     // ---------- Auxiliares ----------
+
+    /** Guarda la notificación y además la empuja en tiempo real a las pestañas abiertas */
+    private void notificar(Collection<Usuario> destinatarios, SolicitudReprogramacion s, String mensaje) {
+        notificacionService.notificarVarios(destinatarios, s, mensaje);
+        eventos.publicar(destinatarios.stream().map(Usuario::getCorreo).toList(),
+                "notificacion", datos("solicitudId", s.getId(), "mensaje", mensaje));
+    }
+
+    /** Evento "solicitud": la lista, el detalle y el horario se recargan solos */
+    private void publicarSolicitud(String accion, SolicitudReprogramacion s,
+                                   Collection<Usuario> coordinacion, Usuario docente) {
+        eventos.publicar(
+                Stream.concat(coordinacion.stream(), Stream.of(docente)).map(Usuario::getCorreo).toList(),
+                "solicitud",
+                datos("accion", accion, "id", s.getId(), "estado", s.getEstado()));
+    }
+
+    /** Map tolerante a nulos (Map.of lanza NPE) para el cuerpo JSON de los eventos */
+    private static Map<String, Object> datos(Object... clavesValores) {
+        Map<String, Object> m = new HashMap<>();
+        for (int i = 0; i < clavesValores.length; i += 2) {
+            Object v = clavesValores[i + 1];
+            if (v != null) m.put((String) clavesValores[i], v instanceof Enum<?> e ? e.name() : v);
+        }
+        return m;
+    }
 
     private SolicitudReprogramacion buscar(Long id) {
         return solicitudRepo.findById(id)
